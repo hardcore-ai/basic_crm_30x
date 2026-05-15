@@ -1,46 +1,78 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema for CRM application
+// Database provider: PostgreSQL (Neon)
+// Learn more: https://pris.ly/d/prisma-schema
+// NOTE: After schema changes, run `npx prisma migrate dev` to create migrations
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// This schema defines three core entities:
+// - Users: CRM application users with roles (AGENT or ADMIN)
+// - Customers: Contact/prospect records with lifecycle status
+// - Interactions: Engagement log entries linked to customers with cascade delete
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// PostgreSQL database connection via Neon
 datasource db {
   provider = "postgresql"
 }
 
+/// User model represents CRM application users
+/// Roles: AGENT (sales agent), ADMIN (administrator)
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("AGENT") // AGENT, ADMIN
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid()) /// Unique user identifier
+  email     String   @unique /// User email (unique constraint)
+  name      String? /// Optional user full name
+  role      String   @default("AGENT") /// User role: AGENT or ADMIN
+  createdAt DateTime @default(now()) /// Account creation timestamp
+  updatedAt DateTime @updatedAt /// Last account update timestamp
 }
 
+/// Customer model represents CRM contacts/prospects
+/// Status lifecycle: LEAD → ACTIVE → CHURNED
 model Customer {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  phone     String?
-  company   String?
-  status    String   @default("LEAD") // LEAD, ACTIVE, CHURNED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid()) /// Unique customer identifier
+  email     String   @unique /// Customer email (unique constraint)
+  name      String /// Customer full name
+  phone     String? /// Optional phone number
+  company   String? /// Optional company name
+  status    String   @default("LEAD") /// Customer status: LEAD, ACTIVE, or CHURNED
+  createdAt DateTime @default(now()) /// Customer record creation timestamp
+  updatedAt DateTime @updatedAt /// Last customer record update timestamp
 
+  /// One-to-many relationship with interaction history
   interactions Interaction[]
+  /// One-to-many relationship with customer history/audit log
+  customerHistory CustomerHistory[]
 }
 
+/// Interaction model logs all customer engagement activities
+/// Types: EMAIL, CALL, MEETING, NOTE
 model Interaction {
-  id         String   @id @default(cuid())
-  customerId String
-  type       String   // EMAIL, CALL, MEETING, NOTE
-  notes      String   @db.Text
-  date       DateTime @default(now())
-  createdAt  DateTime @default(now())
+  id         String   @id @default(cuid()) /// Unique interaction identifier
+  customerId String /// Foreign key reference to Customer
+  type       String   /// Interaction type: EMAIL, CALL, MEETING, or NOTE
+  notes      String   @db.Text /// Detailed notes/description of the interaction
+  date       DateTime @default(now()) /// When the interaction occurred
+  createdAt  DateTime @default(now()) /// When the record was created
 
+  /// Many-to-one relationship with Customer (cascading delete)
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+/// CustomerHistory model logs all changes and actions performed on customer records
+/// Actions: CREATED, UPDATED, DELETED, STATUS_CHANGED, etc.
+model CustomerHistory {
+  id              String   @id @default(cuid()) /// Unique history entry identifier
+  customerId      String /// Foreign key reference to Customer
+  action          String /// Action type: CREATED, UPDATED, DELETED, STATUS_CHANGED, etc.
+  fieldName       String? /// Optional field name that was changed (for updates)
+  oldValue        String? @db.Text /// Optional previous value
+  newValue        String? @db.Text /// Optional new value
+  performedBy     String? /// Optional user ID who performed the action
+  performedByName String? /// Optional user name (denormalized for convenience)
+  createdAt       DateTime @default(now()) /// When the history entry was created
+
+  /// Many-to-one relationship with Customer (cascading delete)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 }
